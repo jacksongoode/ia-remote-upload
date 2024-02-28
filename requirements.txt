@@ -1,0 +1,4 @@
+internetarchive
+python-dotenv
+setuptools
+tqdm
