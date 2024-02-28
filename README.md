@@ -44,7 +44,11 @@ Create a CSV file with the following columns:
 - creator - The creator/author for the item
 - date - The date for the item
 
-As well as any other metadata fields you want to add
+As well as any other metadata fields you want to add. Please see the [documentation](https://archive.org/developers/internetarchive/cli.html) on the Internet Archives CLI.
+
+- [Metadata schema](https://archive.org/developers/metadata-schema/)
+- [Example CSV](https://archive.org/download/ia-pex/uploading.csv)
+- [Credentials](https://archive.org/developers/tutorial-get-ia-credentials.html)
 
 ## Run
 
