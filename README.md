@@ -1,6 +1,12 @@
-# Internet Archive Bulk Uploader
+# Internet Archive Remote Media Uploader
 
 This project provides a script to bulk upload remote files to the [Internet Archive](archive.org) from a CSV file containing URLs and metadata.
+
+**💡 Recommendation:** Because Google is a monopoly, you can get far better download/upload speeds by using a Colab notebook.
+
+<a href="https://colab.research.google.com/github/jacksongoode/ia-remote-upload/blob/main/ia_remote_upload_colab.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
+
+If you would like to run the script yourself, instructions are below.
 
 ## Installation
 
@@ -22,6 +28,7 @@ uv pip install -r requirements.txt
 ```
 
 Then log in to your Internet Archive account with:
+
 ```
 ia configure
 ```
