@@ -1,0 +1,50 @@
+# Internet Archive Bulk Uploader
+
+This project provides a script to bulk upload remote files to the [Internet Archive](archive.org) from a CSV file containing URLs and metadata.
+
+## Installation
+
+Install packages into a venv. You can use [uv](https://github.com/astral-sh/uv) to do this:
+
+### macOS and Linux
+```sh
+curl -LsSf https://astral.sh/uv/install.sh | sh
+uv venv
+source .venv/bin/activate
+uv pip install -r requirements.txt
+```
+
+### Windows
+```ps
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+.venv\Scripts\activate
+uv pip install -r requirements.txt
+```
+
+Then log in to your Internet Archive account with:
+```
+ia configure
+```
+
+Note the location the credentials (ia.ini) are stored in and copy them to the local directory.
+
+## Usage
+
+Create a CSV file with the following columns:
+
+- file - The full URL to the file to upload
+- title - The title for the item on Internet Archive
+- creator - The creator/author for the item
+- date - The date for the item
+
+As well as any other metadata fields you want to add
+
+## Run
+
+```sh
+python ia_remote_upload.py path/to/csv.csv -w 1
+```
+
+This will spawn threads to download each file and upload it to Internet Archive along with the given metadata.
+
+Progress and results will be logged to log.txt. Any failed downloads will be saved in failed.txt

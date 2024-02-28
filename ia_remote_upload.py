@@ -1,3 +1,13 @@
+"""
+Uploads files to the Internet Archive based on a CSV containing file URLs and metadata.
+
+The main entry point is process_csv(), which takes a CSV path, IA keys, and number of workers. It
+reads the CSV, spawns threads to process each row, downloads the file, uploads it to IA, and logs
+the result. Helper functions handle the individual steps.
+"""
+
+import argparse
+import configparser
 import csv
 import logging
 import os
@@ -19,28 +29,23 @@ def configure_logging():
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
 
-    # Clear existing handlers, if any, to prevent logging duplicate entries
     if logger.handlers:
         logger.handlers.clear()
 
-    # File handler
     file_handler = logging.FileHandler("log.txt")
     file_handler.setFormatter(
         logging.Formatter("%(asctime)s %(levelname)s:%(message)s")
     )
 
-    # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(
         logging.Formatter("%(asctime)s %(levelname)s:%(message)s")
     )
 
-    # Add both handlers to the logger
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
 
 
-# Load session from config file
 def load_session(config_file):
     return get_session(config_file=config_file)
 
@@ -50,18 +55,15 @@ def create_identifier():
     return identifier
 
 
-# Clean metadata text
 def clean_metadata_text(text):
     return re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F]+", " ", text)
 
 
-# Write failed URL to file
 def write_failed_url(url, file_path="failed.txt"):
     with open(file_path, "a") as f:
         f.write(url + "\n")
 
 
-# Download file with progress bar
 def download_file_with_progress(url, output_path):
     try:
         response = urlopen(url)
@@ -89,14 +91,12 @@ def download_file_with_progress(url, output_path):
         return False
 
 
-# Encode file URL
 def encode_url(url):
     parsed_url = urlparse(url)
     path = quote(parsed_url.path, safe="/+")
     return f"{parsed_url.scheme}://{parsed_url.netloc}{path}"
 
 
-# Upload file to Internet Archive
 def upload_to_internet_archive(file_path, metadata, keys):
     identifier = create_identifier()
     try:
@@ -120,7 +120,6 @@ def upload_to_internet_archive(file_path, metadata, keys):
         return False
 
 
-# Process each row to download and upload
 def process_row(row, keys):
     file_url = encode_url(row["file"])
     file_name = os.path.basename(file_url)
@@ -152,9 +151,30 @@ def process_row(row, keys):
         os.remove(local_file_path)
 
 
-# Read CSV and process each row in parallel
 def process_csv(csv_path, keys, max_workers=3):
     with open(csv_path, newline="", encoding="utf-8") as csvfile:
         reader = csv.DictReader(csvfile)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             executor.map(lambda row: process_row(row, keys), reader)
+
+
+if __name__ == "__main__":
+    configure_logging()
+
+    # Get credentials
+    config = configparser.ConfigParser()
+    file_path = "ia.ini"
+    config.read(file_path)
+
+    access_key = config["s3"]["access"]
+    secret_key = config["s3"]["secret"]
+    keys = {"access_key": access_key, "secret_key": secret_key}
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("csv_path", help="Path to CSV file")
+    parser.add_argument(
+        "-w", "--workers", type=int, default=3, help="Number of workers"
+    )
+    args = parser.parse_args()
+
+    process_csv(args.csv_path, keys, max_workers=args.workers)
