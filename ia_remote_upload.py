@@ -16,13 +16,13 @@ import re
 import string
 import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
 from urllib.error import HTTPError
 from urllib.parse import quote, urlparse
 from urllib.request import urlopen
 
 from internetarchive import get_session, upload
 from tqdm import tqdm
+from tqdm.contrib.concurrent import thread_map
 
 
 def configure_logging():
@@ -106,8 +106,8 @@ def upload_to_internet_archive(file_path, metadata, keys):
             metadata=metadata,
             access_key=keys["access_key"],
             secret_key=keys["secret_key"],
-            retries=5,
-            retries_sleep=3,
+            retries=3,
+            retries_sleep=5,
             verbose=True,
             verify=True,
         )
@@ -120,7 +120,7 @@ def upload_to_internet_archive(file_path, metadata, keys):
         return False
 
 
-def process_row(row, keys):
+def process_row(row, keys, sleep=1):
     file_url = encode_url(row["file"])
     file_name = os.path.basename(file_url)
 
@@ -144,18 +144,17 @@ def process_row(row, keys):
             logging.info(f"Removed local file {local_file_path}")
         else:
             write_failed_url(file_url)
-
-        time.sleep(1)
     else:
         write_failed_url(file_url)
         os.remove(local_file_path)
 
+    time.sleep(sleep)
+
 
 def process_csv(csv_path, keys, max_workers=3):
     with open(csv_path, newline="", encoding="utf-8") as csvfile:
-        reader = csv.DictReader(csvfile)
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            executor.map(lambda row: process_row(row, keys), reader)
+        reader = list(csv.DictReader(csvfile))
+        thread_map(lambda row: process_row(row, keys), reader, max_workers=max_workers)
 
 
 if __name__ == "__main__":
