@@ -9,6 +9,7 @@ the result. Helper functions handle the individual steps.
 import argparse
 import configparser
 import csv
+import hashlib
 import logging
 import os
 import random
@@ -20,7 +21,7 @@ from urllib.error import HTTPError
 from urllib.parse import quote, urlparse
 from urllib.request import urlopen
 
-from internetarchive import get_session, upload
+from internetarchive import delete, get_item, get_session, upload
 from tqdm import tqdm
 from tqdm.contrib.concurrent import thread_map
 
@@ -50,8 +51,13 @@ def load_session(config_file):
     return get_session(config_file=config_file)
 
 
-def create_identifier():
-    identifier = "".join(random.choices(string.ascii_letters + string.digits, k=30))
+def create_identifier(id_type, row=None):
+    if id_type == "hash":
+        row_str = "".join(str(value) for value in row.values())
+        hash_object = hashlib.md5(row_str.encode(), usedforsecurity=False)
+        identifier = hash_object.hexdigest()
+    else:
+        identifier = "".join(random.choices(string.ascii_letters + string.digits, k=30))
     return identifier
 
 
@@ -97,8 +103,7 @@ def encode_url(url):
     return f"{parsed_url.scheme}://{parsed_url.netloc}{path}"
 
 
-def upload_to_internet_archive(file_path, metadata, keys):
-    identifier = create_identifier()
+def upload_to_internet_archive(file_path, metadata, keys, identifier):
     try:
         upload(
             identifier,
@@ -120,9 +125,29 @@ def upload_to_internet_archive(file_path, metadata, keys):
         return False
 
 
-def process_row(row, keys, sleep=1):
+def delete_item(identifier):
+    item = get_item(identifier)
+    if item.exists():
+        delete(identifier)
+    else:
+        logging.warning(f"Item {identifier} not found for deletion")
+
+
+def process_row(row, keys, sleep=1, id_type="hash", skip=True, delete=False):
     file_url = encode_url(row["file"])
     file_name = os.path.basename(file_url)
+    identifier = None
+
+    if "identifier" in row:
+        # 1. Use ID in row if specified
+        # 1a. If ID uploaded, skip or raise error
+        # 2. No ID in row, use hash of row or random
+        if not get_item(row["identifier"].exists()):
+            identifier = row["identifier"]
+        elif not skip:
+            raise Exception("Item already exists:", row["identifier"])
+        else:
+            identifier = create_identifier(id_type)
 
     logging.info(f"Starting download for {file_name} from {file_url}")
 
@@ -139,11 +164,15 @@ def process_row(row, keys, sleep=1):
             if key not in ["identifier", "file"]:
                 metadata[key] = clean_metadata_text(value)
 
-        if upload_to_internet_archive(local_file_path, metadata, keys):
-            os.remove(local_file_path)
-            logging.info(f"Removed local file {local_file_path}")
+        if delete:
+            delete_item(identifier)
+            logging.info(f"Deleted item with identifier: {identifier}")
         else:
-            write_failed_url(file_url)
+            if upload_to_internet_archive(local_file_path, metadata, keys, identifier):
+                os.remove(local_file_path)
+                logging.info(f"Removed local file {local_file_path}")
+            else:
+                write_failed_url(file_url)
     else:
         write_failed_url(file_url)
         os.remove(local_file_path)
@@ -151,10 +180,16 @@ def process_row(row, keys, sleep=1):
     time.sleep(sleep)
 
 
-def process_csv(csv_path, keys, max_workers=3):
+def process_csv(csv_path, keys, id_type="hash", skip=True, delete=False, max_workers=3):
     with open(csv_path, newline="", encoding="utf-8") as csvfile:
         reader = list(csv.DictReader(csvfile))
-        thread_map(lambda row: process_row(row, keys), reader, max_workers=max_workers)
+        thread_map(
+            lambda row: process_row(row, keys),
+            reader,
+            id_type=id_type,
+            skip=skip,
+            max_workers=max_workers,
+        )
 
 
 if __name__ == "__main__":
@@ -174,6 +209,25 @@ if __name__ == "__main__":
     parser.add_argument(
         "-w", "--workers", type=int, default=3, help="Number of workers"
     )
+    parser.add_argument(
+        "--id_type",
+        default="hash",
+        help="Type of identifier to generate (hash or random)",
+    )
+    parser.add_argument(
+        "--skip", action="store_true", help="Skip if item already exists"
+    )
+    parser.add_argument(
+        "--delete", action="store_true", help="Delete items based on identifier"
+    )
     args = parser.parse_args()
 
-    process_csv(args.csv_path, keys, max_workers=args.workers)
+    # Loop over CSV rows
+    process_csv(
+        args.csv_path,
+        keys,
+        id_type=args.id_type,
+        skip=args.skip,
+        delete=args.delete,
+        max_workers=args.workers,
+    )
